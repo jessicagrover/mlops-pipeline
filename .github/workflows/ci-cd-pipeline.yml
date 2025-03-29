@@ -1,0 +1,60 @@
+name: MLOps Pipeline CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python environment
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build Docker image
+      run: |
+        docker build -t ml-model-api .
+
+    - name: Log in to Azure Container Registry (ACR)
+      uses: azure/docker-login@v1
+      with:
+        login-server: acr12345.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+
+    - name: Push Docker image to ACR
+      run: |
+        docker tag ml-model-api acr12345.azurecr.io/mlops-pipeline:v1
+        docker push acr12345.azurecr.io/mlops-pipeline:v1
+
+    - name: Log in to Azure
+      uses: azure/cli-action@v1
+      with:
+        azure-cli-version: '2.27.0'
+        enable-AzPSSession: true
+
+    # - name: Deploy to Azure Kubernetes Service (AKS)
+    #   run: |
+    #     kubectl apply -f k8s/deployment.yaml
+    #     kubectl rollout status deployment/ml-model-api
+
+    - name: Deploy to AKS
+      run: |
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+
